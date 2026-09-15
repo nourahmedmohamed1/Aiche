@@ -5,14 +5,17 @@ from sqlalchemy.orm import Session
 from jose import jwt, JWTError
 from passlib.context import CryptContext
 
+from dotenv import load_dotenv
 from app.database import get_db
 from app.models.user import User
+
+load_dotenv()
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
 
-JWT_SECRET = os.getenv("JWT_SECRET")
+JWT_SECRET = os.getenv("JWT_SECRET") or os.getenv("JWT_SECRET_KEY") or "default_secret_key_change_in_production"
 JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
 
 

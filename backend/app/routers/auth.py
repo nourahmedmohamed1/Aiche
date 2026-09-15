@@ -15,6 +15,9 @@ def signup(user: UserCreate, db: Session = Depends(get_db)):
     if db.query(User).filter(User.email == user.email).first():
         raise HTTPException(400, "Email already registered")
 
+    if db.query(User).filter(User.username == user.username).first():
+        raise HTTPException(400, "Username already taken")
+
     new_user = User(
         full_name=user.full_name,
         username=user.username,
@@ -33,7 +36,10 @@ def login(
     credentials: OAuth2PasswordRequestForm = Depends(),
     db: Session = Depends(get_db)
 ):
-    user = db.query(User).filter(User.username == credentials.username).first()
+    # Search by username OR email
+    user = db.query(User).filter(
+        (User.username == credentials.username) | (User.email == credentials.username)
+    ).first()
 
     if not user or not verify_password(
         credentials.password,
