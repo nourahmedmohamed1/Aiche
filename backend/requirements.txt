@@ -1,0 +1,10 @@
+# AICHE Backend — Python Dependencies
+fastapi>=0.115.0
+uvicorn>=0.30.0
+sqlalchemy>=2.0.0
+alembic>=1.13.0
+pydantic[email]>=2.0.0
+python-dotenv>=1.0.0
+python-jose[cryptography]>=3.3.0
+passlib[bcrypt]>=1.7.4
+psycopg2-binary>=2.9.0
