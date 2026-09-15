@@ -8,8 +8,10 @@ Run locally:  uvicorn app.main:app --reload
 Docs page:    http://localhost:8000/docs
 """
 
+import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from app.routers import (
     auth,
@@ -20,6 +22,10 @@ from app.routers import (
     reports,
     feedback,
     access,
+    dashboard,
+    courses,
+    workshops,
+    certificates,
 )
 
 app = FastAPI(title="AICHE Backend API")
@@ -27,16 +33,20 @@ app = FastAPI(title="AICHE Backend API")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    # "*" = allow requests from any website — fine for dev/testing.
-    # Before going live, replace with your real frontend URL.
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# ── Auth (shared foundation) ────────────────────────────────────────────────
-app.include_router(auth.router,              prefix="/api/auth",               tags=["Auth"])
+# Static files directory for generated certificates & templates
+STATIC_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "static")
+os.makedirs(STATIC_DIR, exist_ok=True)
+app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
-# ── Member B routers ─────────────────────────────────────────────────────────
+# ── Auth & Dashboard ────────────────────────────────────────────────────────
+app.include_router(auth.router,              prefix="/api/auth",               tags=["Auth"])
+app.include_router(dashboard.router,         prefix="/api/dashboard",          tags=["Dashboard"])
+
+# ── Operations & Community ──────────────────────────────────────────────────
 app.include_router(events.router,            prefix="/api/events",             tags=["Events"])
 app.include_router(sessions.router,          prefix="/api/sessions",           tags=["Sessions"])
 app.include_router(points.router,            prefix="/api/points",             tags=["Points"])
@@ -45,10 +55,10 @@ app.include_router(reports.router,           prefix="/api/reports",            t
 app.include_router(feedback.router,          prefix="/api/feedback",           tags=["Feedback"])
 app.include_router(access.router,            prefix="/api/access-permissions", tags=["Access"])
 
-# ── Member A routers (uncomment once Member A delivers their code) ───────────
-# from app.routers import courses, workshops
-# app.include_router(courses.router,    prefix="/api/courses",    tags=["Courses"])
-# app.include_router(workshops.router,  prefix="/api/workshops",  tags=["Workshops"])
+# ── Learning Track (Courses, Workshops & Certificates) ──────────────────────
+app.include_router(courses.router,           prefix="/api/courses",            tags=["Courses"])
+app.include_router(workshops.router,         prefix="/api/workshops",          tags=["Workshops"])
+app.include_router(certificates.router,      prefix="/api/certificates",       tags=["Certificates"])
 
 
 @app.get("/")

@@ -24,6 +24,8 @@ class UserOut(BaseModel):
     email: str
     role: str
     committee_id: Optional[int] = None
+    committee: Optional[str] = None
+    permissions: Optional[dict[str, bool]] = None
     created_at: datetime
 
     class Config:

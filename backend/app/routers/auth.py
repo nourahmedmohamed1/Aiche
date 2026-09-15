@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.user import User
 from app.schemas.user import UserCreate, UserLogin, UserOut, Token
-from app.dependencies import hash_password, verify_password, create_access_token, get_current_user
+from app.dependencies import hash_password, verify_password, create_access_token, get_current_user, get_user_permissions
 
 router = APIRouter()
 
@@ -59,5 +59,17 @@ def login(
 
 
 @router.get("/me", response_model=UserOut)
-def get_me(current_user: User = Depends(get_current_user)):
-    return current_user
+def get_me(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    committee_name = current_user.committee.name if current_user.committee else None
+    permissions = get_user_permissions(db, current_user)
+    return UserOut(
+        id=current_user.id,
+        full_name=current_user.full_name,
+        username=current_user.username,
+        email=current_user.email,
+        role=current_user.role.value if hasattr(current_user.role, 'value') else str(current_user.role),
+        committee_id=current_user.committee_id,
+        committee=committee_name,
+        permissions=permissions,
+        created_at=current_user.created_at
+    )

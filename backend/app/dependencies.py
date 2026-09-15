@@ -64,3 +64,53 @@ def has_edit_access(db: Session, current_user: User, section_name: str) -> bool:
     permission = db.query(AccessPermission).filter_by(
         section_name=section_name, committee_id=current_user.committee_id).first()
     return permission is not None and permission.can_edit
+
+
+def get_user_permissions(db: Session, user: User) -> dict:
+    role = user.role.value if hasattr(user.role, 'value') else str(user.role)
+    committee_name = user.committee.name if user.committee else None
+
+    if role in ("president", "vice_president", "secretary"):
+        return {
+            "view_courses": True,
+            "add_course": True,
+            "edit_course": True,
+            "delete_course": True,
+            "add_course_part": True,
+            "view_workshops": True,
+            "add_workshop": True,
+            "edit_workshop": True,
+            "delete_workshop": True,
+            "view_certificates": True,
+        }
+
+    is_technical = committee_name in ("Technical", "Web Development")
+    can_add_course = is_technical or has_edit_access(db, user, "courses")
+    can_add_workshop = (role == "committee_admin") or has_edit_access(db, user, "workshops")
+
+    if role == "committee_admin":
+        return {
+            "view_courses": True,
+            "add_course": can_add_course,
+            "edit_course": can_add_course,
+            "delete_course": can_add_course,
+            "add_course_part": can_add_course,
+            "view_workshops": True,
+            "add_workshop": can_add_workshop,
+            "edit_workshop": can_add_workshop,
+            "delete_workshop": can_add_workshop,
+            "view_certificates": True,
+        }
+
+    return {
+        "view_courses": True,
+        "add_course": False,
+        "edit_course": False,
+        "delete_course": False,
+        "add_course_part": False,
+        "view_workshops": True,
+        "add_workshop": False,
+        "edit_workshop": False,
+        "delete_workshop": False,
+        "view_certificates": True,
+    }
