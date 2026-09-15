@@ -1,5 +1,5 @@
 """
-schemas/event.py  –  Member B
+schemas/event.py  – 
 Pydantic v2 request/response schemas for Events & Site Visits.
 
 Key design decisions:
