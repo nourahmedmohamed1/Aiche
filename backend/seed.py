@@ -46,15 +46,19 @@ if not db.query(User).filter_by(role=RoleEnum.president).first():
     db.add(User(
         full_name="Head President",
         username="president",
-        email="president@aiche.com",
-        password_hash=hash_password("ChangeMe123!"),
+        email="AICHECUSCgeneral@gmail.com",
+        password_hash=hash_password("AICHECUSCgeneral@2026"),
         role=RoleEnum.president,
     ))
     db.commit()
     print("  [OK] Created default president account (username: president)")
     print("  IMPORTANT: Log in and change the password immediately!")
 else:
-    print("  - President account already exists")
+    pres = db.query(User).filter_by(role=RoleEnum.president).first()
+    pres.email = "AICHECUSCgeneral@gmail.com"
+    pres.password_hash = hash_password("AICHECUSCgeneral@2026")
+    db.commit()
+    print("  - President account already exists (updated credentials)")
 
 # ── 3. Committee Admin (Head) accounts ───────────────────────────────────────
 COMMITTEE_ADMINS = [
