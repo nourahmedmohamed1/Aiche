@@ -32,7 +32,6 @@ client_config = {
         "client_secret": client_secret,
         "auth_uri": "https://accounts.google.com/o/oauth2/auth",
         "token_uri": "https://oauth2.googleapis.com/token",
-        "redirect_uris": ["http://localhost:8080/"],
     }
 }
 
@@ -43,7 +42,7 @@ try:
     print("\nOpening browser for Google Drive authorization...")
     print("Please select your Google Account (e.g. aichecu.webdevelopment@gmail.com) and click ALLOW.\n")
 
-    creds = flow.run_local_server(port=8080, prompt="consent")
+    creds = flow.run_local_server(port=0, prompt="consent")
 
     refresh_token = creds.refresh_token
 

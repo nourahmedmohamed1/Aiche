@@ -78,6 +78,7 @@ def check_and_issue_course_certificate(db: Session, user_id: int, course_id: int
 
     from app.models.course import Course
     from app.utils.certificate_generator import generate_personalized_certificate_png, CERTIFICATES_DIR
+    from app.utils.cloudinary_uploader import upload_to_cloudinary
     from app.utils.drive_uploader import upload_to_drive
     import os
 
@@ -99,11 +100,14 @@ def check_and_issue_course_certificate(db: Session, user_id: int, course_id: int
     file_path = os.path.join(CERTIFICATES_DIR, filename)
 
     try:
-        # 2. Upload to Google Drive
-        drive_url = upload_to_drive(file_path, filename)
+        # 2. Upload to Cloudinary (or Google Drive if Cloudinary credentials not set)
+        if os.getenv("CLOUDINARY_URL") or os.getenv("CLOUDINARY_CLOUD_NAME"):
+            cloud_url = upload_to_cloudinary(file_path, filename)
+        else:
+            cloud_url = upload_to_drive(file_path, filename)
 
-        # 3. Delete local file after upload if uploaded to Drive
-        if drive_url != local_rel_url and os.path.exists(file_path):
+        # 3. Delete local file after upload if uploaded to Cloud
+        if cloud_url != local_rel_url and os.path.exists(file_path):
             os.remove(file_path)
 
         # 4. Save Certificate row to database
@@ -111,7 +115,7 @@ def check_and_issue_course_certificate(db: Session, user_id: int, course_id: int
             user_id=user_id,
             type="course",
             source_id=course_id,
-            pdf_url=drive_url,
+            pdf_url=cloud_url,
         )
         db.add(certificate)
         db.commit()
@@ -119,7 +123,6 @@ def check_and_issue_course_certificate(db: Session, user_id: int, course_id: int
         return certificate
     except Exception as e:
         db.rollback()
-        # Clean up local file on error if exists
         if os.path.exists(file_path):
             try:
                 os.remove(file_path)

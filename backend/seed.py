@@ -21,21 +21,23 @@ db = SessionLocal()
 
 # ── 1. Committees (from the baseline's fixed list) ───────────────────────────
 COMMITTEES = [
-    ("Marketing",        "aiche.marketing@gmail.com"),
-    ("OC",               "aiche.oc@gmail.com"),
-    ("Technical",        "aiche.technical@gmail.com"),
-    ("Web Development",  "aiche.webdevelopment@gmail.com"),
-    ("PR",               "aiche.pr@gmail.com"),
-    ("QC",               "aiche.qc@gmail.com"),
-    ("General Committee","aiche.generalcommittee@gmail.com"),
+    ("Marketing",        "AIChECU.Marketing@gmail.com"),
+    ("OC",               "AIChECU.OC@gmail.com"),
+    ("Technical",        "AIChECU.Technical@gmail.com"),
+    ("Web Development",  "AIChECU.WebDevelopment@gmail.com"),
+    ("PR",               "aichecu.pr@gmail.com"),
+    ("QC",               "aiche.cu.qc@gmail.com"),
+    ("General Committee","AICHECUSCgeneral@gmail.com"),
 ]
 
 for name, email in COMMITTEES:
-    if not db.query(Committee).filter_by(name=name).first():
+    existing_comm = db.query(Committee).filter_by(name=name).first()
+    if not existing_comm:
         db.add(Committee(name=name, login_email=email))
         print(f"  [OK] Created committee: {name}")
     else:
-        print(f"  - Committee already exists: {name}")
+        existing_comm.login_email = email
+        print(f"  - Committee already exists (updated email): {name}")
 
 db.commit()
 
@@ -56,13 +58,13 @@ else:
 
 # ── 3. Committee Admin (Head) accounts ───────────────────────────────────────
 COMMITTEE_ADMINS = [
-    ("Marketing Head",        "marketing_head", "aiche.marketing@gmail.com",        "Marketing"),
-    ("OC Head",               "oc_head",        "aiche.oc@gmail.com",               "OC"),
-    ("Technical Head",        "technical_head", "aiche.technical@gmail.com",        "Technical"),
-    ("Web Development Head",  "webdev_head",    "aiche.webdevelopment@gmail.com",   "Web Development"),
-    ("PR Head",               "pr_head",        "aiche.pr@gmail.com",               "PR"),
-    ("QC Head",               "qc_head",        "aiche.qc@gmail.com",               "QC"),
-    ("General Committee Head","general_head",   "aiche.generalcommittee@gmail.com", "General Committee"),
+    ("Marketing Head",        "marketing_head", "AIChECU.Marketing@gmail.com",        "Marketing"),
+    ("OC Head",               "oc_head",        "AIChECU.OC@gmail.com",               "OC"),
+    ("Technical Head",        "technical_head", "AIChECU.Technical@gmail.com",        "Technical"),
+    ("Web Development Head",  "webdev_head",    "AIChECU.WebDevelopment@gmail.com",   "Web Development"),
+    ("PR Head",               "pr_head",        "aichecu.pr@gmail.com",               "PR"),
+    ("QC Head",               "qc_head",        "aiche.cu.qc@gmail.com",              "QC"),
+    ("General Committee Head","general_head",   "AICHECUSCgeneral@gmail.com",         "General Committee"),
 ]
 
 for full_name, username, email, comm_name in COMMITTEE_ADMINS:
@@ -86,6 +88,7 @@ for full_name, username, email, comm_name in COMMITTEE_ADMINS:
         comm = db.query(Committee).filter_by(name=comm_name).first()
         if comm:
             existing_user.committee_id = comm.id
+        existing_user.email = email
         existing_user.password_hash = hash_password(default_pass)
         print(f"  - Updated committee admin: {username} ({comm_name}) | Password: {default_pass}")
 

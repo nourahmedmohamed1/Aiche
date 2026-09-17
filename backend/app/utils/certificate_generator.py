@@ -89,8 +89,8 @@ def generate_personalized_certificate_png(
       anchor="mm",
   )
 
-  # Draw Subtitle Line (Larger text for course completion description and course name)
-  subtitle_text = f"for successfully completing the {source_type} {title}"
+  # Draw Subtitle Line (Standard appreciation message)
+  subtitle_text = "We appreciate your continuous dedication and consistency."
   draw.text(
       (1760, 1520), subtitle_text, fill=(34, 37, 42), font=font_sub, anchor="mm"
   )
