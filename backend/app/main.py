@@ -32,7 +32,10 @@ from app.database import Base, engine
 import app.models  # Ensures all models are registered
 
 # Automatically create all database tables if they do not exist
-Base.metadata.create_all(bind=engine)
+try:
+    Base.metadata.create_all(bind=engine)
+except Exception as e:
+    print(f"Notice: Database tables could not be initialized on import: {e}")
 
 app = FastAPI(title="AICHE Backend API")
 
