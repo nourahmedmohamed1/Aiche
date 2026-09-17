@@ -63,7 +63,12 @@ def generate_certificate(
 ):
     """
     Triggers dynamic PNG certificate creation for a completed course or workshop.
+    Uploads the certificate to Google Drive and saves the shareable URL.
     """
+    import os
+    from app.utils.certificate_generator import CERTIFICATES_DIR
+    from app.utils.drive_uploader import upload_to_drive
+
     title = "Continuous Learning Program"
     if req.source_type == "course":
         c = db.query(Course).filter(Course.id == req.source_id).first()
@@ -74,7 +79,9 @@ def generate_certificate(
         if w:
             title = w.title
 
-    # Generate personalized PNG image
+    filename = f"cert_{req.source_type}_{req.source_id}_user_{current_user.id}.png"
+
+    # 1. Generate personalized PNG image
     img_url = generate_personalized_certificate_png(
         user_full_name=current_user.full_name,
         title=title,
@@ -83,24 +90,45 @@ def generate_certificate(
         user_id=current_user.id
     )
 
-    # Save to database
-    cert = db.query(Certificate).filter_by(
-        user_id=current_user.id,
-        type=req.source_type,
-        source_id=req.source_id
-    ).first()
+    file_path = os.path.join(CERTIFICATES_DIR, filename)
 
-    if not cert:
-        cert = Certificate(
+    try:
+        # 2. Upload to Google Drive
+        drive_url = upload_to_drive(file_path, filename)
+
+        # 3. Delete local file post-upload if uploaded to Drive
+        if drive_url != img_url and os.path.exists(file_path):
+            os.remove(file_path)
+
+        # 4. Save to database
+        cert = db.query(Certificate).filter_by(
             user_id=current_user.id,
             type=req.source_type,
-            source_id=req.source_id,
-            pdf_url=img_url
-        )
-        db.add(cert)
-    else:
-        cert.pdf_url = img_url
+            source_id=req.source_id
+        ).first()
 
-    db.commit()
-    db.refresh(cert)
-    return cert
+        if not cert:
+            cert = Certificate(
+                user_id=current_user.id,
+                type=req.source_type,
+                source_id=req.source_id,
+                pdf_url=drive_url
+            )
+            db.add(cert)
+        else:
+            cert.pdf_url = drive_url
+
+        db.commit()
+        db.refresh(cert)
+        return cert
+    except Exception as e:
+        db.rollback()
+        if os.path.exists(file_path):
+            try:
+                os.remove(file_path)
+            except Exception:
+                pass
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Certificate generation failed: {str(e)}"
+        )

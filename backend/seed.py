@@ -56,27 +56,38 @@ else:
 
 # ── 3. Committee Admin (Head) accounts ───────────────────────────────────────
 COMMITTEE_ADMINS = [
-    ("Marketing Head",        "marketing_head", "marketing.head@aiche.com", "Marketing"),
-    ("OC Head",               "oc_head",        "oc.head@aiche.com",        "OC"),
-    ("Technical Head",        "technical_head", "technical.head@aiche.com", "Technical"),
-    ("Web Development Head",  "webdev_head",    "webdev.head@aiche.com",    "Web Development"),
-    ("PR Head",               "pr_head",        "pr.head@aiche.com",        "PR"),
-    ("QC Head",               "qc_head",        "qc.head@aiche.com",        "QC"),
+    ("Marketing Head",        "marketing_head", "aiche.marketing@gmail.com",        "Marketing"),
+    ("OC Head",               "oc_head",        "aiche.oc@gmail.com",               "OC"),
+    ("Technical Head",        "technical_head", "aiche.technical@gmail.com",        "Technical"),
+    ("Web Development Head",  "webdev_head",    "aiche.webdevelopment@gmail.com",   "Web Development"),
+    ("PR Head",               "pr_head",        "aiche.pr@gmail.com",               "PR"),
+    ("QC Head",               "qc_head",        "aiche.qc@gmail.com",               "QC"),
+    ("General Committee Head","general_head",   "aiche.generalcommittee@gmail.com", "General Committee"),
 ]
 
 for full_name, username, email, comm_name in COMMITTEE_ADMINS:
-    if not db.query(User).filter_by(username=username).first():
+    email_name = email.split("@")[0]
+    default_pass = f"{email_name}@2026"
+    existing_user = db.query(User).filter((User.username == username) | (User.email == email)).first()
+
+    if not existing_user:
         comm = db.query(Committee).filter_by(name=comm_name).first()
         if comm:
             db.add(User(
                 full_name=full_name,
                 username=username,
                 email=email,
-                password_hash=hash_password("AdminPass123!"),
+                password_hash=hash_password(default_pass),
                 role=RoleEnum.committee_admin,
                 committee_id=comm.id,
             ))
-            print(f"  [OK] Created committee admin: {username} ({comm_name})")
+            print(f"  [OK] Created committee admin: {username} ({comm_name}) | Password: {default_pass}")
+    else:
+        comm = db.query(Committee).filter_by(name=comm_name).first()
+        if comm:
+            existing_user.committee_id = comm.id
+        existing_user.password_hash = hash_password(default_pass)
+        print(f"  - Updated committee admin: {username} ({comm_name}) | Password: {default_pass}")
 
 db.commit()
 db.close()

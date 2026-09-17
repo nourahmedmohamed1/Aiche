@@ -52,9 +52,12 @@ def check_and_issue_course_certificate(db: Session, user_id: int, course_id: int
     """
     Section 9.3 — Course certificate generation.
     Issues a certificate once ALL parts of the course show status = "completed"
-    for this student.  Returns the Certificate row, or None if not yet earned.
+    for this student. Returns the Certificate row, or None if not yet earned.
+    Uploads the generated certificate to Google Drive and stores the shareable link.
     """
     parts = db.query(CoursePart).filter_by(course_id=course_id).all()
+    if not parts:
+        return None
 
     all_completed = all(
         db.query(CourseProgress).filter_by(
@@ -73,17 +76,56 @@ def check_and_issue_course_certificate(db: Session, user_id: int, course_id: int
     if existing:
         return existing
 
-    # (PDF generation + Cloudinary upload would go here in production.)
-    certificate = Certificate(
-        user_id=user_id,
-        type="course",
+    from app.models.course import Course
+    from app.utils.certificate_generator import generate_personalized_certificate_png, CERTIFICATES_DIR
+    from app.utils.drive_uploader import upload_to_drive
+    import os
+
+    user = db.query(User).filter(User.id == user_id).first()
+    course = db.query(Course).filter(Course.id == course_id).first()
+    user_name = user.full_name if user else f"User {user_id}"
+    course_title = course.title if course else f"Course {course_id}"
+
+    # 1. Generate local PNG certificate
+    filename = f"cert_course_{course_id}_user_{user_id}.png"
+    local_rel_url = generate_personalized_certificate_png(
+        user_full_name=user_name,
+        title=course_title,
+        source_type="course",
         source_id=course_id,
-        pdf_url=f"https://cloudinary.example.com/certificates/course_{course_id}_user_{user_id}.pdf"
+        user_id=user_id,
     )
-    db.add(certificate)
-    db.commit()
-    db.refresh(certificate)
-    return certificate
+
+    file_path = os.path.join(CERTIFICATES_DIR, filename)
+
+    try:
+        # 2. Upload to Google Drive
+        drive_url = upload_to_drive(file_path, filename)
+
+        # 3. Delete local file after upload if uploaded to Drive
+        if drive_url != local_rel_url and os.path.exists(file_path):
+            os.remove(file_path)
+
+        # 4. Save Certificate row to database
+        certificate = Certificate(
+            user_id=user_id,
+            type="course",
+            source_id=course_id,
+            pdf_url=drive_url,
+        )
+        db.add(certificate)
+        db.commit()
+        db.refresh(certificate)
+        return certificate
+    except Exception as e:
+        db.rollback()
+        # Clean up local file on error if exists
+        if os.path.exists(file_path):
+            try:
+                os.remove(file_path)
+            except Exception:
+                pass
+        raise RuntimeError(f"Failed to issue course certificate: {str(e)}") from e
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

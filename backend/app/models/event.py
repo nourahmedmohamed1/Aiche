@@ -9,9 +9,9 @@ class EventSiteVisit(Base):
     type = Column(String)  # "event" or "site_visit"
     title = Column(String)
     description = Column(String)
-    date = Column(DateTime)
+    date = Column(DateTime(timezone=True))
     location = Column(String)
-    registration_deadline = Column(DateTime)
+    registration_deadline = Column(DateTime(timezone=True))
     created_by = Column(Integer, ForeignKey("users.id"))
 
 
@@ -21,7 +21,7 @@ class EventRegistration(Base):
     id = Column(Integer, primary_key=True)
     event_id = Column(Integer, ForeignKey("events_site_visits.id"))
     user_id = Column(Integer, ForeignKey("users.id"))
-    registered_at = Column(DateTime)
+    registered_at = Column(DateTime(timezone=True))
 
 
 class EventAttendance(Base):

@@ -28,6 +28,12 @@ from app.routers import (
     certificates,
 )
 
+from app.database import Base, engine
+import app.models  # Ensures all models are registered
+
+# Automatically create all database tables if they do not exist
+Base.metadata.create_all(bind=engine)
+
 app = FastAPI(title="AICHE Backend API")
 
 app.add_middleware(

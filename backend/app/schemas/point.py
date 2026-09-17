@@ -36,9 +36,29 @@ class TotalPointsOut(BaseModel):
 
 # ── Committee Database ───────────────────────────────────────────────────────
 
+from pydantic import field_validator
+from typing import Dict
+
 class CommitteeDatabaseCreate(BaseModel):
     """Body for POST /api/committees/{id}/database — a flexible JSON row."""
-    row_data: Any  # dict with arbitrary keys, e.g. {"place": "...", "phone": "..."}
+    row_data: Dict[str, Any]  # dict with arbitrary keys
+
+    @field_validator("row_data")
+    def validate_row_data_is_dict(cls, v):
+        if not isinstance(v, dict):
+            raise ValueError("row_data must be a JSON object (dict)")
+        return v
+
+
+class CommitteeDatabaseUpdate(BaseModel):
+    """Body for PUT /api/committees/{id}/database/{row_id} — updated flexible JSON row."""
+    row_data: Dict[str, Any]
+
+    @field_validator("row_data")
+    def validate_row_data_is_dict(cls, v):
+        if not isinstance(v, dict):
+            raise ValueError("row_data must be a JSON object (dict)")
+        return v
 
 
 class CommitteeDatabaseOut(BaseModel):

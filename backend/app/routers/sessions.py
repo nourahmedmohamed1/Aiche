@@ -43,7 +43,7 @@ ATTENDANCE_POINTS = {
 
 TASK_POINTS = {
     "on_time":       (2,  "Task submitted on time"),
-    "late":          (1,  "Task submitted late"),
+    "late":          (0,  "Task submitted after deadline"),
     "not_submitted": (-1, "Task not submitted"),
 }
 
@@ -141,60 +141,78 @@ def save_scoring(
     )),
 ):
     """
-    Save one member's attendance/task/engagement/bonus for a session.
-    Each field maps to a specific point value (Sections 35-39) and writes
-    its own point_entries row — granular history, not a single lump.
+    Save or update one member's attendance/task/engagement/bonus for a session.
+    Each field maps to a specific point value and writes its own point_entries row.
+    `source_id` points back to the `session_scoring` row.
+    Re-scoring replaces previous entries in a single transaction without duplication.
     """
+    from app.models.point import PointEntry
+
     session = db.query(CommitteeSession).filter(
         CommitteeSession.id == session_id
     ).first()
     if not session:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Session not found")
 
-    # Prevent duplicate scoring for the same user × session.
+    # Check for existing scoring row for this user x session
     existing = db.query(SessionScoring).filter_by(
         session_id=session_id, user_id=data.user_id
     ).first()
+
     if existing:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Scoring already exists for this user")
+        # Delete previous point entries for this scoring row to avoid duplication
+        db.query(PointEntry).filter(
+            PointEntry.user_id == data.user_id,
+            PointEntry.source_type.in_(["attendance", "task", "engagement", "bonus"]),
+            (PointEntry.source_id == existing.id) | (PointEntry.source_id == session_id)
+        ).delete(synchronize_session=False)
 
-    # Create the scoring row.
-    scoring = SessionScoring(
-        session_id=session_id,
-        user_id=data.user_id,
-        attendance_status=data.attendance_status,
-        task_status=data.task_status,
-        engagement_status=data.engagement_status,
-        bonus_points=data.bonus_points,
-        recorded_by=current_user.id,
-    )
-    db.add(scoring)
+        # Update scoring row
+        existing.attendance_status = data.attendance_status
+        existing.task_status = data.task_status
+        existing.engagement_status = data.engagement_status
+        existing.bonus_points = data.bonus_points
+        existing.recorded_by = current_user.id
+        scoring = existing
+    else:
+        # Create new scoring row
+        scoring = SessionScoring(
+            session_id=session_id,
+            user_id=data.user_id,
+            attendance_status=data.attendance_status,
+            task_status=data.task_status,
+            engagement_status=data.engagement_status,
+            bonus_points=data.bonus_points,
+            recorded_by=current_user.id,
+        )
+        db.add(scoring)
+        db.flush()  # Flush to populate scoring.id
 
-    # ── Award points per dimension ──────────────────────────────────────
+    # ── Award points per dimension using scoring.id as source_id ──────────────
     total_points = 0
 
     # Attendance points
     att_info = ATTENDANCE_POINTS.get(data.attendance_status, (0, "Unknown attendance"))
-    add_point_entry(db, data.user_id, "attendance", session_id, att_info[0], att_info[1])
+    add_point_entry(db, data.user_id, "attendance", scoring.id, att_info[0], att_info[1])
     total_points += att_info[0]
 
     # Task points
     task_info = TASK_POINTS.get(data.task_status, (0, "Unknown task status"))
-    add_point_entry(db, data.user_id, "task", session_id, task_info[0], task_info[1])
+    add_point_entry(db, data.user_id, "task", scoring.id, task_info[0], task_info[1])
     total_points += task_info[0]
 
     # Engagement points
     eng_info = ENGAGEMENT_POINTS.get(data.engagement_status, (0, "Unknown engagement"))
-    add_point_entry(db, data.user_id, "engagement", session_id, eng_info[0], eng_info[1])
+    add_point_entry(db, data.user_id, "engagement", scoring.id, eng_info[0], eng_info[1])
     total_points += eng_info[0]
 
     # Bonus points (only if non-zero)
     if data.bonus_points:
         add_point_entry(
-            db, data.user_id, "bonus", session_id,
+            db, data.user_id, "bonus", scoring.id,
             data.bonus_points, f"Bonus points ({data.bonus_points})"
         )
         total_points += data.bonus_points
 
     db.commit()
-    return {"message": "Scoring saved", "points_added": total_points}
+    return {"message": "Scoring saved", "points_added": total_points, "scoring_id": scoring.id}

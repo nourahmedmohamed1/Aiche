@@ -21,6 +21,7 @@ class CommitteeSession(Base):
     status = Column(String)
     created_by = Column(Integer, ForeignKey("users.id"))
 
+    committee = relationship("Committee")
     target_committees = relationship("Committee", secondary=session_visibility_committees)
 
 

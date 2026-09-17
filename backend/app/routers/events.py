@@ -32,20 +32,40 @@ from app.core_logic import add_point_entry
 router = APIRouter()
 
 
-# ── Helpers ──────────────────────────────────────────────────────────────────
+# ── UTC+3 Timezone Helpers ───────────────────────────────────────────────────
+
+TZ_UTC3 = datetime.timezone(datetime.timedelta(hours=3))
+
+
+def get_now_utc3() -> datetime.datetime:
+    """Returns the current datetime in UTC+3 timezone."""
+    return datetime.datetime.now(TZ_UTC3)
+
+
+def _normalize_to_utc3(dt: datetime.datetime) -> datetime.datetime:
+    """Ensures a datetime object is localized to UTC+3."""
+    if dt is None:
+        return None
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=TZ_UTC3)
+    return dt.astimezone(TZ_UTC3)
+
 
 def _compute_event_status(event: EventSiteVisit) -> str:
     """
-    Derive the display status on-the-fly (Section 24 of the baseline).
-    • Upcoming           — registration is still open AND event hasn't happened
-    • Registration Closed — past the deadline but the event date hasn't arrived
-    • Finished           — event date is in the past
+    Derive the display status on-the-fly in UTC+3:
+    • upcoming             — now < registration_deadline
+    • closed_registration  — registration_deadline <= now < date
+    • finished             — now >= date
     """
-    now = datetime.datetime.utcnow()
-    if now < event.registration_deadline:
+    now = get_now_utc3()
+    reg_deadline = _normalize_to_utc3(event.registration_deadline)
+    event_date = _normalize_to_utc3(event.date)
+
+    if now < reg_deadline:
         return "upcoming"
-    elif now < event.date:
-        return "registration_closed"
+    elif now < event_date:
+        return "closed_registration"
     else:
         return "finished"
 
@@ -63,9 +83,8 @@ ATTENDANCE_POINTS = {
 @router.get("/", response_model=list[EventOut])
 def list_events(db: Session = Depends(get_db)):
     """
-    Public — no auth required.  Returns every event/site visit with a
-    computed `status` field so the frontend can show labels without doing
-    date arithmetic itself.
+    Public — no auth required. Returns every event/site visit with a
+    computed `status` field calculated in UTC+3.
     """
     events = db.query(EventSiteVisit).all()
     result = []
@@ -84,21 +103,23 @@ def create_event(
         "committee_admin", "president", "vice_president", "secretary"
     )),
 ):
-    """Create an event or site visit.  `created_by` is set from the JWT."""
+    """Create an event or site visit. Datetimes are normalized to UTC+3."""
+    date_utc3 = _normalize_to_utc3(event.date)
+    deadline_utc3 = _normalize_to_utc3(event.registration_deadline)
+
     new_event = EventSiteVisit(
         type=event.type,
         title=event.title,
         description=event.description,
-        date=event.date,
+        date=date_utc3,
         location=event.location,
-        registration_deadline=event.registration_deadline,
+        registration_deadline=deadline_utc3,
         created_by=current_user.id,
     )
     db.add(new_event)
     db.commit()
     db.refresh(new_event)
 
-    # Build response with computed status.
     out = EventOut.model_validate(new_event)
     out.status = _compute_event_status(new_event)
     return out
@@ -112,27 +133,30 @@ def register_for_event(
 ):
     """
     Register the logged-in user for an event.
-    Rejected if the registration deadline has already passed.
+    Rejected with 400 'Registration is closed' if registration_deadline has passed.
     """
     event = db.query(EventSiteVisit).filter(EventSiteVisit.id == event_id).first()
     if not event:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Event not found")
 
-    # Enforce the registration deadline.
-    if datetime.datetime.utcnow() > event.registration_deadline:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Registration is closed")
+    now = get_now_utc3()
+    reg_deadline = _normalize_to_utc3(event.registration_deadline)
+
+    # Enforce the registration deadline cutoff in UTC+3
+    if now > reg_deadline:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Registration is closed")
 
     # Prevent duplicate registrations.
     existing = db.query(EventRegistration).filter_by(
         event_id=event_id, user_id=current_user.id
     ).first()
     if existing:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Already registered")
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Already registered")
 
     registration = EventRegistration(
         event_id=event_id,
         user_id=current_user.id,
-        registered_at=datetime.datetime.utcnow(),
+        registered_at=now,
     )
     db.add(registration)
     db.commit()
