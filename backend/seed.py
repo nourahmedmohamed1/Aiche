@@ -1,18 +1,20 @@
 """
 seed.py  –  One-time script to create starter data (Section 12.4 of the guide).
 
-Run ONCE after `alembic upgrade head`:
+Run ONCE after `alembic upgrade head` or to refresh credentials:
     cd backend
     python seed.py
 
-Creates:
-  1. The fixed list of committees from the baseline.
-  2. A default President account to bootstrap the system
-     (no other admin can be created without a President existing first).
+Creates/updates:
+  1. The fixed list of 7 committees from the baseline.
+  2. The President account (Head President, AICHECUSCgeneral@gmail.com).
+  3. The Committee Admin accounts from admins_credentials.csv.
 
 This script is idempotent — safe to run multiple times without duplicating rows.
 """
 
+import os
+import csv
 from app.database import SessionLocal
 from app.models.user import Committee, User, RoleEnum
 from app.dependencies import hash_password
@@ -20,6 +22,17 @@ from app.dependencies import hash_password
 db = SessionLocal()
 
 # ── 1. Committees (from the baseline's fixed list) ───────────────────────────
+COMMITTEES_MAP = {
+    "Marketing Head": "Marketing",
+    "OC Head": "OC",
+    "Technical Head": "Technical",
+    "Web Development Head": "Web Development",
+    "PR Head": "PR",
+    "QC Head": "QC",
+    "General Committee Head": "General Committee",
+    "Head President": "General Committee",
+}
+
 COMMITTEES = [
     ("Marketing",        "AIChECU.Marketing@gmail.com"),
     ("OC",               "AIChECU.OC@gmail.com"),
@@ -37,65 +50,81 @@ for name, email in COMMITTEES:
         print(f"  [OK] Created committee: {name}")
     else:
         existing_comm.login_email = email
-        print(f"  - Committee already exists (updated email): {name}")
+        print(f"  - Committee exists: {name}")
 
 db.commit()
 
-# ── 2. Default President account ─────────────────────────────────────────────
-if not db.query(User).filter_by(role=RoleEnum.president).first():
-    db.add(User(
-        full_name="Head President",
-        username="president",
-        email="AICHECUSCgeneral@gmail.com",
-        password_hash=hash_password("AICHECUSCgeneral@2026"),
-        role=RoleEnum.president,
-    ))
-    db.commit()
-    print("  [OK] Created default president account (username: president)")
-    print("  IMPORTANT: Log in and change the password immediately!")
-else:
-    pres = db.query(User).filter_by(role=RoleEnum.president).first()
-    pres.email = "AICHECUSCgeneral@gmail.com"
-    pres.password_hash = hash_password("AICHECUSCgeneral@2026")
-    db.commit()
-    print("  - President account already exists (updated credentials)")
+general_comm = db.query(Committee).filter_by(name="General Committee").first()
+general_comm_id = general_comm.id if general_comm else None
 
-# ── 3. Committee Admin (Head) accounts ───────────────────────────────────────
-COMMITTEE_ADMINS = [
-    ("Marketing Head",        "marketing_head", "AIChECU.Marketing@gmail.com",        "Marketing"),
-    ("OC Head",               "oc_head",        "AIChECU.OC@gmail.com",               "OC"),
-    ("Technical Head",        "technical_head", "AIChECU.Technical@gmail.com",        "Technical"),
-    ("Web Development Head",  "webdev_head",    "AIChECU.WebDevelopment@gmail.com",   "Web Development"),
-    ("PR Head",               "pr_head",        "aichecu.pr@gmail.com",               "PR"),
-    ("QC Head",               "qc_head",        "aiche.cu.qc@gmail.com",              "QC"),
-    ("General Committee Head","general_head",   "AICHECUSCgeneral@gmail.com",         "General Committee"),
+# ── 2. Seed accounts from admins_credentials.csv ───────────────────────────
+csv_paths = [
+    os.path.join(os.path.dirname(os.path.dirname(__file__)), "admins_credentials.csv"),
+    os.path.join(os.path.dirname(__file__), "admins_credentials.csv"),
+    "admins_credentials.csv",
+    "../admins_credentials.csv",
 ]
 
-for full_name, username, email, comm_name in COMMITTEE_ADMINS:
-    email_name = email.split("@")[0]
-    default_pass = f"{email_name}@2026"
-    existing_user = db.query(User).filter((User.username == username) | (User.email == email)).first()
+csv_file = None
+for p in csv_paths:
+    if os.path.exists(p):
+        csv_file = p
+        break
 
-    if not existing_user:
-        comm = db.query(Committee).filter_by(name=comm_name).first()
-        if comm:
-            db.add(User(
-                full_name=full_name,
-                username=username,
-                email=email,
-                password_hash=hash_password(default_pass),
-                role=RoleEnum.committee_admin,
-                committee_id=comm.id,
-            ))
-            print(f"  [OK] Created committee admin: {username} ({comm_name}) | Password: {default_pass}")
-    else:
-        comm = db.query(Committee).filter_by(name=comm_name).first()
-        if comm:
-            existing_user.committee_id = comm.id
-        existing_user.email = email
-        existing_user.password_hash = hash_password(default_pass)
-        print(f"  - Updated committee admin: {username} ({comm_name}) | Password: {default_pass}")
+if csv_file:
+    print(f"\n--- Seeding from {csv_file} ---")
+    with open(csv_file, mode="r", encoding="utf-8-sig") as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            role_str = (row.get("Role") or "").strip()
+            full_name = (row.get("Full Name") or "").strip()
+            username = (row.get("Username") or "").strip()
+            email = (row.get("Email") or "").strip()
+            password = (row.get("Default Password") or "").strip()
 
-db.commit()
+            if not username or not email:
+                continue
+
+            # President and General Committee Head share the High Board account
+            if username == "president" or role_str.lower() == "president":
+                role_enum = RoleEnum.president
+            else:
+                role_enum = RoleEnum.committee_admin
+
+            comm_name = COMMITTEES_MAP.get(full_name, "General Committee")
+            comm = db.query(Committee).filter_by(name=comm_name).first()
+            comm_id = comm.id if comm else general_comm_id
+
+            # Look up existing user by username first to avoid duplicate email clash
+            user = db.query(User).filter(User.username == username).first()
+            if not user:
+                # Check if another user already has this email (e.g. shared General Committee email)
+                email_user = db.query(User).filter(User.email == email).first()
+                if email_user and email_user.username != username:
+                    print(f"  [Notice] Email '{email}' is shared by {email_user.username}; keeping {email_user.username}")
+                    continue
+
+                user = User(
+                    full_name=full_name,
+                    username=username,
+                    email=email,
+                    password_hash=hash_password(password),
+                    role=role_enum,
+                    committee_id=comm_id,
+                )
+                db.add(user)
+                print(f"  [OK] Created {role_str}: {username} ({email}) | Password: {password}")
+            else:
+                user.full_name = full_name
+                user.email = email
+                user.password_hash = hash_password(password)
+                user.role = role_enum
+                user.committee_id = comm_id
+                print(f"  [OK] Updated {role_str}: {username} ({email}) | Password: {password}")
+
+    db.commit()
+else:
+    print("admins_credentials.csv not found.")
+
 db.close()
-print("\nSeed complete.")
+print("\nSeed completed successfully.")

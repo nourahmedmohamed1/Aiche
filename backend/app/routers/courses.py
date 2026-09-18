@@ -205,3 +205,57 @@ def delete_course_part(
     db.delete(part)
     db.commit()
     return None
+
+
+@router.post("/course-parts/{part_id}/complete")
+@router.post("/{course_id}/parts/{part_id}/complete")
+def complete_part(
+    part_id: int,
+    course_id: int = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Mark a course part completed for the current user.
+    Enforces sequential unlock rule: part cannot be completed until the previous part is done.
+    If part is a task, awards +2 points. Automatically issues course certificate when all parts are done.
+    """
+    import datetime
+    from app.core_logic import is_part_unlocked, check_and_issue_course_certificate, add_point_entry
+    from app.models.course import ProgressStatus, PartType
+
+    part = db.query(CoursePart).filter(CoursePart.id == part_id).first()
+    if not part:
+        raise HTTPException(status_code=404, detail="Course part not found")
+
+    if not is_part_unlocked(db, current_user.id, part):
+        raise HTTPException(status_code=403, detail="Previous part not completed yet")
+
+    progress = db.query(CourseProgress).filter_by(user_id=current_user.id, course_part_id=part_id).first()
+    if not progress:
+        progress = CourseProgress(
+            user_id=current_user.id,
+            course_part_id=part_id,
+            status=ProgressStatus.completed,
+            completion_type="online",
+            completed_at=datetime.datetime.utcnow(),
+        )
+        db.add(progress)
+    else:
+        progress.status = ProgressStatus.completed
+        progress.completion_type = "online"
+        progress.completed_at = datetime.datetime.utcnow()
+
+    # Award points if part is task
+    if part.type == "task" or part.type == PartType.task:
+        add_point_entry(db, current_user.id, "task", progress.id or part_id, 2, "Task submitted on time")
+
+    db.commit()
+
+    # Auto-issue certificate if all parts completed
+    try:
+        check_and_issue_course_certificate(db, current_user.id, part.course_id)
+    except Exception:
+        pass
+
+    return {"message": "Part completed"}

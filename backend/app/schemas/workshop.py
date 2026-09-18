@@ -16,6 +16,15 @@ class WorkshopSessionCreate(WorkshopSessionBase):
     pass
 
 
+class WorkshopSessionUpdate(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    date: Optional[datetime] = None
+    mode: Optional[str] = None
+    location_or_link: Optional[str] = None
+    materials_url: Optional[str] = None
+
+
 class WorkshopSessionOut(WorkshopSessionBase):
     id: int
     workshop_id: int
@@ -33,6 +42,13 @@ class WorkshopBase(BaseModel):
 
 class WorkshopCreate(WorkshopBase):
     pass
+
+
+class WorkshopUpdate(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    image_url: Optional[str] = None
+    instructor: Optional[str] = None
 
 
 class WorkshopOut(WorkshopBase):

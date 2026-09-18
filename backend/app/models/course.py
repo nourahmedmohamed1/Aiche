@@ -30,7 +30,8 @@ class Course(Base):
     created_by = Column(Integer, ForeignKey("users.id"))
 
     parts = relationship("CoursePart", back_populates="course",
-                          order_by="CoursePart.order_index")
+                          order_by="CoursePart.order_index",
+                          cascade="all, delete-orphan")
 
 
 class CoursePart(Base):
@@ -44,6 +45,7 @@ class CoursePart(Base):
     content_url = Column(String, nullable=True)
 
     course = relationship("Course", back_populates="parts")
+    progress_records = relationship("CourseProgress", back_populates="part", cascade="all, delete-orphan")
 
 
 class CourseProgress(Base):
@@ -55,6 +57,8 @@ class CourseProgress(Base):
     status = Column(Enum(ProgressStatus), default=ProgressStatus.locked)
     completion_type = Column(String, nullable=True)
     completed_at = Column(DateTime, nullable=True)
+
+    part = relationship("CoursePart", back_populates="progress_records")
 
 
 class Certificate(Base):

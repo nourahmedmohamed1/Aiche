@@ -232,18 +232,30 @@ def delete_reported_feedback(db: Session, feedback_id: int, approver: User) -> b
     if not fb:
         return False
 
-    # Find the author of the offending comment.
-    author = db.query(User).filter(User.id == fb.user_id).first()
+    author_id = fb.user_id
+    author = db.query(User).filter(User.id == author_id).first() if author_id else None
 
     # Soft-delete the feedback (preserve a record of what was said).
     fb.is_deleted = True
     fb.deleted_by = approver.id
 
-    # Hard-delete the author's account.
+    # Hard-delete the author's account and related dependent rows.
     if author:
+        from app.models.point import PointEntry
+        from app.models.course import CourseProgress
+        from app.models.event import EventRegistration, EventAttendance
+        from app.models.session import SessionScoring
+
+        db.query(PointEntry).filter_by(user_id=author_id).delete()
+        db.query(CourseProgress).filter_by(user_id=author_id).delete()
+        db.query(EventRegistration).filter_by(user_id=author_id).delete()
+        db.query(EventAttendance).filter_by(user_id=author_id).delete()
+        db.query(SessionScoring).filter_by(user_id=author_id).delete()
+        db.query(Feedback).filter(Feedback.user_id == author_id, Feedback.id != feedback_id).delete()
+        
+        fb.user_id = None
         db.delete(author)
 
-    # ONE commit saves both changes atomically — if anything fails between
-    # the two operations, NEITHER change is saved.
+    # ONE commit saves both changes atomically
     db.commit()
     return True

@@ -1,4 +1,5 @@
 from sqlalchemy import Column, Integer, String, ForeignKey, DateTime
+from sqlalchemy.orm import relationship
 from app.database import Base
 
 
@@ -11,8 +12,8 @@ class Workshop(Base):
     image_url = Column(String)
     instructor = Column(String)
     created_by = Column(Integer, ForeignKey("users.id"))
-    # Note: no `parts` relationship like Course has — Workshops don't follow a
-    # fixed sequential path, they just have one or more independent Sessions.
+
+    sessions = relationship("WorkshopSession", back_populates="workshop", cascade="all, delete-orphan")
 
 
 class WorkshopSession(Base):
@@ -27,6 +28,9 @@ class WorkshopSession(Base):
     location_or_link = Column(String)
     materials_url = Column(String, nullable=True)
 
+    workshop = relationship("Workshop", back_populates="sessions")
+    attendances = relationship("WorkshopAttendance", back_populates="session", cascade="all, delete-orphan")
+
 
 class WorkshopAttendance(Base):
     __tablename__ = "workshop_attendance"
@@ -36,3 +40,5 @@ class WorkshopAttendance(Base):
     user_id = Column(Integer, ForeignKey("users.id"))
     status = Column(String)  # "present" or "absent"
     recorded_by = Column(Integer, ForeignKey("users.id"))
+
+    session = relationship("WorkshopSession", back_populates="attendances")

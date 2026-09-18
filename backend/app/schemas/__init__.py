@@ -28,6 +28,16 @@ from .course import (
     CertificateCreate,
     CertificateOut,
 )
+from .workshop import (
+    WorkshopBase,
+    WorkshopCreate,
+    WorkshopUpdate,
+    WorkshopOut,
+    WorkshopSessionBase,
+    WorkshopSessionCreate,
+    WorkshopSessionUpdate,
+    WorkshopSessionOut,
+)
 
 __all__ = [
     "UserCreate",
@@ -67,4 +77,12 @@ __all__ = [
     "CourseProgressOut",
     "CertificateCreate",
     "CertificateOut",
+    "WorkshopBase",
+    "WorkshopCreate",
+    "WorkshopUpdate",
+    "WorkshopOut",
+    "WorkshopSessionBase",
+    "WorkshopSessionCreate",
+    "WorkshopSessionUpdate",
+    "WorkshopSessionOut",
 ]

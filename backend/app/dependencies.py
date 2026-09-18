@@ -19,12 +19,20 @@ JWT_SECRET = os.getenv("JWT_SECRET") or os.getenv("JWT_SECRET_KEY") or "default_
 JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
 
 
+import bcrypt
+
+
 def hash_password(password: str) -> str:
-    return pwd_context.hash(password)
+    pwd_bytes = password[:72].encode('utf-8')
+    salt = bcrypt.gensalt()
+    return bcrypt.hashpw(pwd_bytes, salt).decode('utf-8')
 
 
 def verify_password(plain: str, hashed: str) -> bool:
-    return pwd_context.verify(plain, hashed)
+    try:
+        return bcrypt.checkpw(plain[:72].encode('utf-8'), hashed.encode('utf-8'))
+    except Exception:
+        return False
 
 
 def create_access_token(data: dict, expires_minutes: int = 1440):
